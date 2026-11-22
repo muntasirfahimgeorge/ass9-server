@@ -1,94 +1,121 @@
-# FixMate API
+# FixMate API – Backend Server
 
-Backend REST API for FixMate, a Smart Device and Home Appliance Repair Service Platform.
+FixMate is a Smart Device and Home Appliance Repair Service Platform that connects customers with technicians for reliable repair services.
 
-Built with Node.js, Express.js, MongoDB, BetterAuth JWT authentication, and Stripe Checkout.
+This repository contains the backend REST API for FixMate. It manages authentication, users, services, repair bookings, payment processing, and administrative operations.
+
+## Live Website
+
+**Frontend URL:** `https://YOUR_DEPLOYED_FRONTEND_URL`
+
+## Project Repositories
+
+- **Frontend Repository:** https://github.com/muntasirfahimgeorge/ass9-client
+- **Backend Repository:** https://github.com/muntasirfahimgeorge/ass9-server
 
 ## Features
 
 - Role-based authentication and authorization.
 - Customer, technician, and admin access control.
-- Service creation, management, approval, and availability.
+- User profile management.
+- Service creation, updating, deletion, and approval.
+- Service availability management.
 - Server-side service search, filtering, and sorting.
-- Repair booking and booking status management.
-- Stripe Checkout test-mode payment processing.
+- Repair booking creation and management.
+- Booking status transition validation.
+- Customer booking cancellation for eligible requests.
+- Stripe Checkout integration in test mode.
 - Payment verification and webhook handling.
+- Payment records stored in MongoDB.
 - Admin dashboard APIs for platform management.
-- MongoDB database integration.
+- Centralized error handling.
+- Protected API routes and role-based middleware.
 
 ## Technology Stack
 
-- Node.js
-- Express.js
-- MongoDB
-- BetterAuth JWT / JWKS
-- Stripe
-- JavaScript (ES Modules)
+- **Runtime:** Node.js
+- **Backend Framework:** Express.js 5
+- **Database:** MongoDB
+- **Language:** JavaScript (ES Modules)
+- **JWT Verification:** JOSE (`jose`)
+- **JWKS Integration:** `jwks`
+- **Payment Gateway:** Stripe
+- **Environment Configuration:** dotenv
+- **Cross-Origin Resource Sharing:** CORS
+- **Testing:** Node.js built-in test runner
 
 ## Requirements
 
-- Node.js
-- npm
-- MongoDB database
-- FixMate frontend application
-- Stripe account for test payments
+Before running the project, make sure you have:
+
+- Node.js installed.
+- npm installed.
+- MongoDB database.
+- Stripe account for test-mode payments.
+- FixMate frontend application.
 
 ## Installation
 
-Clone the repository:
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/muntasirfahimgeorge/ass9-server.git
 ```
 
-Navigate to the project:
+### 2. Navigate to the Project Directory
 
 ```bash
 cd ass9-server
 ```
 
-Install dependencies:
+### 3. Install Dependencies
 
 ```bash
 npm install
 ```
 
-Create the environment file:
+### 4. Configure Environment Variables
 
-```bash
-cp .env.example .env
-```
+Create a `.env` file in the project root.
 
-On Windows PowerShell, use:
+Copy the example environment file:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Configure the environment variables in `.env`.
+If `.env.example` is unavailable, create `.env` manually and configure the variables required by the backend.
 
-## Environment Variables
+### 5. Environment Variables
+
+Configure the following variables according to your project setup:
 
 | Variable | Description |
 |---|---|
-| PORT | Backend server port. Default: 5000 |
-| DB_URI | MongoDB connection string |
-| CLIENT_URL | Frontend application URL |
-| BETTER_AUTH_URL | BetterAuth frontend base URL |
-| STRIPE_SECRET_KEY | Stripe secret key |
-| STRIPE_WEBHOOK_SECRET | Stripe webhook signing secret |
+| `PORT` | Backend server port. Default: 5000 |
+| `DB_URI` | MongoDB connection string |
+| `CLIENT_URL` | Frontend application URL |
+| `BETTER_AUTH_URL` | Better Auth frontend base URL |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 
-Never commit the `.env` file or expose secret keys.
+Use the exact variable names required by the server source code and `.env.example`.
 
-## Run the Server
+**Important:** Never commit `.env` files, database credentials, JWT secrets, or Stripe secret keys to GitHub.
 
-Development mode:
+## Running the Server
+
+### Development Mode
+
+Start the server with Node.js watch mode:
 
 ```bash
 npm run dev
 ```
 
-Production mode:
+### Production Mode
+
+Start the server:
 
 ```bash
 npm start
@@ -100,95 +127,127 @@ By default, the API runs at:
 http://localhost:5000
 ```
 
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Starts the server using Node.js watch mode |
+| `npm start` | Starts the server in production mode |
+| `npm test` | Runs the automated test suite |
+
 ## Health Check
 
-Endpoint:
+**Endpoint:**
 
 ```http
 GET /api/health
 ```
 
-This endpoint checks whether the backend is running.
+This endpoint checks whether the backend API is running.
 
 ## API Route Groups
 
 All application API routes are mounted under `/api`.
 
-| Route Group | Description |
+| Route | Description |
 |---|---|
 | `/api/health` | Backend health check |
 | `/api/users` | User profile management |
 | `/api/services` | Service listing and management |
 | `/api/bookings` | Repair booking management |
-| `/api/payments` | Stripe checkout and payment verification |
+| `/api/payments` | Stripe Checkout and payment verification |
 | `/api/admin` | Administrative management |
 
-### Authentication
+## Authentication and Authorization
+
+FixMate supports three user roles:
+
+- **Customer:** Can browse services, create bookings, track repair progress, and make payments.
+- **Technician:** Can manage repair services and assigned booking requests.
+- **Admin:** Can manage users, services, bookings, and platform transactions.
 
 Protected endpoints require a valid JWT access token.
 
-Include the token in the request header:
+Include the access token in the request header:
 
 ```http
 Authorization: Bearer YOUR_ACCESS_TOKEN
 ```
 
-The backend verifies JWT signatures using the BetterAuth JWKS endpoint and applies role-based authorization.
+The backend verifies JWT signatures using JOSE and the Better Auth JWKS endpoint. Role-based middleware controls access to protected operations.
 
-Supported roles:
+### Role-Based Middleware
 
-- customer
-- technician
-- admin
+The backend applies authorization checks based on user roles:
 
-### Service Search and Filtering
+- `verifyToken` – Verifies the user's authentication token.
+- `verifyCustomer` – Restricts access to customer-specific operations.
+- `verifyTechnician` – Restricts access to technician operations.
+- `verifyAdmin` – Restricts access to administrative operations.
 
-The services API supports server-side:
+Unauthorized requests return appropriate HTTP status codes.
 
-- Search by service title and category.
-- Category filtering.
-- Service mode filtering.
-- Price ascending and descending sorting.
-- Newest-first sorting.
+## Service Search and Filtering
 
-### Booking Workflow
+The services API supports server-side search, filtering, and sorting.
 
-Booking status transitions are enforced by the backend:
+Available functionality includes:
+
+- Search by service title.
+- Search by service category.
+- Filter by category.
+- Filter by service mode.
+- Sort by price in ascending order.
+- Sort by price in descending order.
+- Sort by newest services.
+
+## Booking Workflow
+
+FixMate enforces booking status transitions on the backend.
 
 ```text
 requested
     |
-    +----> accepted
-    |          |
-    |          v
-    |      in-progress
-    |          |
-    |          v
-    |      completed
+    +------> accepted
+    |            |
+    |            v
+    |        in-progress
+    |            |
+    |            v
+    |        completed
     |
-    +----> rejected
+    +------> rejected
 ```
 
 Customers can cancel eligible requested bookings.
 
-### Payment Workflow
+Technicians can review booking requests, accept or reject them, update repair progress, and complete repair jobs with a final amount.
 
-FixMate uses Stripe Checkout in test mode.
+The backend validates booking ownership, user roles, and permitted status transitions.
 
-Payment is permitted only for completed, unpaid bookings.
+## Payment Integration
 
-The backend:
+FixMate integrates Stripe Checkout in test mode.
 
-- Calculates the payment amount from the booking record.
-- Creates Stripe Checkout Sessions.
-- Verifies completed payments with Stripe.
-- Stores payment records in MongoDB.
-- Updates booking payment status.
-- Handles Stripe webhook events.
+Customers can pay for a repair only after the booking has been completed and the final repair amount has been set.
 
-Payment methods are managed through Stripe Dashboard settings.
+The backend handles:
 
-For testing, use Stripe test-mode credentials. Never use live payment credentials during local testing.
+- Stripe Checkout Session creation.
+- Server-side payment amount validation.
+- Payment verification.
+- Stripe webhook event handling.
+- Payment record creation in MongoDB.
+- Booking payment status updates.
+- Prevention of duplicate payment processing where supported by the implementation.
+
+Payment amounts are determined from the backend booking record rather than trusting an amount supplied by the frontend.
+
+### Stripe Testing
+
+Use Stripe test-mode credentials for development and testing.
+
+Never expose Stripe secret keys in frontend code or commit them to the repository.
 
 ## Project Structure
 
@@ -205,32 +264,49 @@ ass9-server/
 ├── .env.example
 ├── .gitignore
 ├── package.json
+├── package-lock.json
 └── README.md
 ```
 
 ## Error Handling
 
-The backend uses a centralized error-handling middleware and consistent JSON API responses.
+The backend uses centralized error handling to return consistent API responses.
 
-Common HTTP status codes:
+Common HTTP status codes include:
 
-- `200` - Successful request
-- `201` - Resource created
-- `400` - Invalid request
-- `401` - Authentication required
-- `403` - Insufficient permissions
-- `404` - Resource not found
-- `409` - Conflict
-- `500` - Internal server error
+| Status Code | Description |
+|---|---|
+| `200` | Successful request |
+| `201` | Resource created |
+| `400` | Invalid request |
+| `401` | Authentication required |
+| `403` | Insufficient permissions |
+| `404` | Resource not found |
+| `409` | Conflict |
+| `500` | Internal server error |
 
 ## Security
 
+The backend includes security measures such as:
+
 - JWT signature verification.
-- Role-based route protection.
+- Role-based authorization.
+- Protected API routes.
 - User-specific data access.
+- Booking ownership validation.
 - Server-side payment amount verification.
 - Stripe webhook signature verification.
 - Environment-based secret management.
+
+## Testing
+
+Run the automated test suite using:
+
+```bash
+npm test
+```
+
+The project uses Node.js's built-in test runner.
 
 ## License
 
