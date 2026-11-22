@@ -34,6 +34,13 @@ const BOOKING_STATUSES = [
   "cancelled",
 ];
 
+const SERVICE_APPROVAL_STATUSES = [
+  "all",
+  "pending",
+  "approved",
+  "rejected",
+];
+
 // Every admin endpoint requires authentication and admin role.
 adminRouter.use(verifyToken, verifyAdmin);
 
@@ -65,6 +72,40 @@ adminRouter.get("/users", async (req, res) => {
     res,
     users,
     "Users fetched successfully"
+  );
+});
+
+// GET /api/admin/services
+// Get all services with an optional approval status filter.
+
+adminRouter.get("/services", async (req, res) => {
+  const { approvalStatus = "all" } = req.query;
+
+  if (
+    typeof approvalStatus !== "string" ||
+    !SERVICE_APPROVAL_STATUSES.includes(approvalStatus)
+  ) {
+    throw new ApiError(
+      400,
+      "Invalid service approval status"
+    );
+  }
+
+  const filter = {};
+
+  if (approvalStatus !== "all") {
+    filter.approvalStatus = approvalStatus;
+  }
+
+  const services = await servicesCollection
+    .find(filter)
+    .sort({ createdAt: -1, _id: -1 })
+    .toArray();
+
+  sendSuccess(
+    res,
+    services,
+    "Admin services fetched successfully"
   );
 });
 
