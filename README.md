@@ -4,9 +4,13 @@ FixMate is a Smart Device and Home Appliance Repair Service Platform that connec
 
 This repository contains the backend REST API for FixMate. It manages authentication, users, services, repair bookings, payment processing, and administrative operations.
 
-## Live Website
+## Live Deployment
 
-**Frontend URL:** `https://YOUR_DEPLOYED_FRONTEND_URL`
+**Frontend URL:** https://ass9-client.vercel.app/
+
+**Backend API URL:** https://fixmate-server1.onrender.com/api
+
+**Backend Health Check:** https://fixmate-server1.onrender.com/api/health
 
 ## Project Repositories
 
@@ -38,7 +42,7 @@ This repository contains the backend REST API for FixMate. It manages authentica
 - **Database:** MongoDB
 - **Language:** JavaScript (ES Modules)
 - **JWT Verification:** JOSE (`jose`)
-- **JWKS Integration:** `jwks`
+- **JWKS Integration:** JWKS
 - **Payment Gateway:** Stripe
 - **Environment Configuration:** dotenv
 - **Cross-Origin Resource Sharing:** CORS
@@ -142,6 +146,10 @@ http://localhost:5000
 ```http
 GET /api/health
 ```
+
+**Live Health Check:**
+
+https://fixmate-server1.onrender.com/api/health
 
 This endpoint checks whether the backend API is running.
 
