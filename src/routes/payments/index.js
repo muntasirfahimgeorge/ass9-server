@@ -70,9 +70,7 @@ async function finalizePaidSession(session, eventId = null) {
     );
   }
 
-  if (
-    session.currency !== "usd"
-  ) {
+  if (session.currency !== "usd") {
     throw new ApiError(
       400,
       "Unexpected payment currency"
@@ -157,9 +155,8 @@ async function finalizePaidSession(session, eventId = null) {
     stripeEventIds: eventId ? [eventId] : [],
   };
 
-  // The unique bookingId index prevents duplicate payment records.
-  // $setOnInsert ensures repeated verification does not overwrite
-  // the original payment.
+  // Prevent duplicate payment records.
+  // Repeated verification does not overwrite the original payment.
 
   try {
     await paymentsCollection.updateOne(
@@ -190,7 +187,7 @@ async function finalizePaidSession(session, eventId = null) {
     );
   }
 
-  // A different Checkout Session must not create another payment
+  // Prevent another Checkout Session from paying
   // for a booking that already has a recorded payment.
 
   if (savedPayment.stripeSessionId !== session.id) {
@@ -213,7 +210,8 @@ async function finalizePaidSession(session, eventId = null) {
     );
   }
 
-  // Mark the booking paid. Repeated calls are safe.
+  // Mark the booking as paid.
+  // Repeated calls are safe.
 
   await bookingCollection.updateOne(
     {
@@ -282,6 +280,7 @@ paymentsRouter.post(
     }
 
     // Reuse an existing active Checkout Session.
+
     if (booking.checkoutSessionId) {
       try {
         const existingSession =
@@ -330,8 +329,7 @@ paymentsRouter.post(
             },
           }
         );
-      }
-             catch (error) {
+      } catch (error) {
         if (error instanceof ApiError) {
           throw error;
         }
@@ -345,7 +343,6 @@ paymentsRouter.post(
 
         // A missing or expired previous session can be replaced.
 
-        // A missing or expired previous session can be replaced.
         await bookingCollection.updateOne(
           {
             _id: bookingId,
@@ -365,7 +362,6 @@ paymentsRouter.post(
     const session =
       await stripeClient.checkout.sessions.create({
         mode: "payment",
-        payment_method_types: ["card"],
 
         customer_email: req.user.email,
 
@@ -399,6 +395,7 @@ paymentsRouter.post(
       });
 
     // Store the active session so repeated clicks reuse it.
+
     const savedSession = await bookingCollection.updateOne(
       {
         _id: bookingId,
@@ -421,9 +418,10 @@ paymentsRouter.post(
     if (savedSession.matchedCount === 0) {
       // Another concurrent request may have created a session.
       // Expire the unused session and reuse the winning session.
-      await stripeClient.checkout.sessions.expire(
-        session.id
-      ).catch(() => {});
+
+      await stripeClient.checkout.sessions
+        .expire(session.id)
+        .catch(() => {});
 
       const latestBooking = await bookingCollection.findOne({
         _id: bookingId,
@@ -609,6 +607,7 @@ export async function stripeWebhookHandler(req, res) {
   } catch (error) {
     // Invalid business-state events should not be retried forever.
     // Database or unexpected server failures return 500 for retry.
+
     if (
       error.statusCode &&
       error.statusCode >= 400 &&
