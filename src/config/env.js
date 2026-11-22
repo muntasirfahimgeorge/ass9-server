@@ -1,7 +1,7 @@
 
 import "dotenv/config";
 
-const DB_URI = process.env.DB_URI;
+const DB_URI = process.env.DB_URI?.trim();
 
 if (!DB_URI) {
   throw new Error(
@@ -9,14 +9,59 @@ if (!DB_URI) {
   );
 }
 
-const CLIENT_URL =
-  process.env.CLIENT_URL || "http://localhost:3000";
+function validatePort(value) {
+  if (value === undefined || value.trim() === "") {
+    return 5000;
+  }
 
-const BETTER_AUTH_URL =
-  process.env.BETTER_AUTH_URL || CLIENT_URL;
+  const port = Number(value);
+
+  if (
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65535
+  ) {
+    throw new Error(
+      "PORT must be an integer between 1 and 65535"
+    );
+  }
+
+  return port;
+}
+
+function validateHttpUrl(value, variableName) {
+  try {
+    const parsedUrl = new URL(value);
+
+    if (
+      !["http:", "https:"].includes(parsedUrl.protocol) ||
+      !parsedUrl.hostname
+    ) {
+      throw new Error();
+    }
+
+    return value;
+  } catch {
+    throw new Error(
+      `${variableName} must be a valid HTTP or HTTPS URL`
+    );
+  }
+}
+
+const PORT = validatePort(process.env.PORT);
+
+const CLIENT_URL = validateHttpUrl(
+  process.env.CLIENT_URL?.trim() || "http://localhost:3000",
+  "CLIENT_URL"
+);
+
+const BETTER_AUTH_URL = validateHttpUrl(
+  process.env.BETTER_AUTH_URL?.trim() || CLIENT_URL,
+  "BETTER_AUTH_URL"
+);
 
 export const env = {
-  PORT: Number(process.env.PORT) || 5000,
+  PORT,
   DB_URI,
   CLIENT_URL,
   BETTER_AUTH_URL,
