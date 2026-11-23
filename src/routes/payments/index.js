@@ -43,10 +43,11 @@ function validateBookingId(id) {
 }
 
 // Shared payment finalization function.
-// Used by both success-page verification and Stripe webhook.
+// Used by success-page verification and Stripe webhook.
 
 async function finalizePaidSession(session, eventId = null) {
   if (
+    !session?.id ||
     session.mode !== "payment" ||
     session.payment_status !== "paid"
   ) {
@@ -88,13 +89,6 @@ async function finalizePaidSession(session, eventId = null) {
     throw new ApiError(404, "Booking not found");
   }
 
-  if (booking.status !== "completed") {
-    throw new ApiError(
-      409,
-      "Only completed bookings can be paid"
-    );
-  }
-
   const finalAmount = Number(booking.finalAmount);
 
   if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
@@ -127,12 +121,107 @@ async function finalizePaidSession(session, eventId = null) {
     );
   }
 
+  const bookingKey = String(booking._id);
+
+  // Check whether this booking already has a payment record.
+  // This check must happen before checking checkoutSessionId
+  // because successful finalization removes checkoutSessionId.
+
+  const existingPayment = await paymentsCollection.findOne({
+    bookingId: bookingKey,
+  });
+
+  if (existingPayment) {
+    if (existingPayment.stripeSessionId !== session.id) {
+      throw new ApiError(
+        409,
+        "This booking already has a recorded payment"
+      );
+    }
+
+    if (existingPayment.transactionId !== transactionId) {
+      throw new ApiError(
+        409,
+        "Stripe transaction does not match the recorded payment"
+      );
+    }
+
+    if (eventId) {
+      await paymentsCollection.updateOne(
+        {
+          bookingId: bookingKey,
+          stripeSessionId: session.id,
+        },
+        {
+          $addToSet: {
+            stripeEventIds: eventId,
+          },
+        }
+      );
+    }
+
+    // Restore paid status safely if a repeated webhook arrives.
+    await bookingCollection.updateOne(
+      {
+        _id: bookingObjectId,
+        customerEmail,
+        status: "completed",
+      },
+      {
+        $set: {
+          paymentStatus: "paid",
+          paidAt: existingPayment.paidAt,
+        },
+        $unset: {
+          checkoutSessionId: "",
+        },
+      }
+    );
+
+    return existingPayment;
+  }
+
+  // If there is no payment record yet, the booking must still
+  // be linked to this exact Checkout Session.
+  //
+  // A missing ID can happen when Stripe sends its webhook
+  // before the session ID is saved in MongoDB.
+  // Throwing a normal error makes the webhook return 500,
+  // allowing Stripe to retry instead of permanently ignoring it.
+
+  if (!booking.checkoutSessionId) {
+    throw new Error(
+      "Checkout Session has not been linked to the booking yet"
+    );
+  }
+
+  if (booking.checkoutSessionId !== session.id) {
+    throw new ApiError(
+      409,
+      "Stripe Checkout Session does not match this booking"
+    );
+  }
+
+  if (booking.status !== "completed") {
+    throw new ApiError(
+      409,
+      "Only completed bookings can be paid"
+    );
+  }
+
+  if (booking.paymentStatus !== "unpaid") {
+    throw new ApiError(
+      409,
+      "This booking is not available for payment"
+    );
+  }
+
   const paidAt = session.created
     ? new Date(session.created * 1000)
     : new Date();
 
   const paymentDocument = {
-    bookingId: String(booking._id),
+    bookingId: bookingKey,
 
     serviceTitle: booking.serviceTitle,
 
@@ -155,13 +244,12 @@ async function finalizePaidSession(session, eventId = null) {
     stripeEventIds: eventId ? [eventId] : [],
   };
 
-  // Prevent duplicate payment records.
-  // Repeated verification does not overwrite the original payment.
+  // Unique bookingId index prevents duplicate payment records.
 
   try {
     await paymentsCollection.updateOne(
       {
-        bookingId: String(booking._id),
+        bookingId: bookingKey,
       },
       {
         $setOnInsert: paymentDocument,
@@ -177,7 +265,7 @@ async function finalizePaidSession(session, eventId = null) {
   }
 
   const savedPayment = await paymentsCollection.findOne({
-    bookingId: String(booking._id),
+    bookingId: bookingKey,
   });
 
   if (!savedPayment) {
@@ -187,20 +275,21 @@ async function finalizePaidSession(session, eventId = null) {
     );
   }
 
-  // Prevent another Checkout Session from paying
-  // for a booking that already has a recorded payment.
-
-  if (savedPayment.stripeSessionId !== session.id) {
+  if (
+    savedPayment.stripeSessionId !== session.id ||
+    savedPayment.transactionId !== transactionId
+  ) {
     throw new ApiError(
       409,
-      "This booking already has a recorded payment"
+      "This booking already has a different recorded payment"
     );
   }
 
   if (eventId) {
     await paymentsCollection.updateOne(
       {
-        bookingId: String(booking._id),
+        bookingId: bookingKey,
+        stripeSessionId: session.id,
       },
       {
         $addToSet: {
@@ -211,13 +300,13 @@ async function finalizePaidSession(session, eventId = null) {
   }
 
   // Mark the booking as paid.
-  // Repeated calls are safe.
+  // This is safe for repeated calls.
 
   await bookingCollection.updateOne(
     {
       _id: bookingObjectId,
+      customerEmail,
       status: "completed",
-      paymentStatus: { $in: ["unpaid", "paid"] },
     },
     {
       $set: {
@@ -321,6 +410,7 @@ paymentsRouter.post(
         await bookingCollection.updateOne(
           {
             _id: bookingId,
+            customerEmail: req.user.email,
             checkoutSessionId: existingSession.id,
           },
           {
@@ -346,6 +436,7 @@ paymentsRouter.post(
         await bookingCollection.updateOne(
           {
             _id: bookingId,
+            customerEmail: req.user.email,
             checkoutSessionId: booking.checkoutSessionId,
           },
           {
@@ -605,8 +696,8 @@ export async function stripeWebhookHandler(req, res) {
       }
     }
   } catch (error) {
-    // Invalid business-state events should not be retried forever.
-    // Database or unexpected server failures return 500 for retry.
+    // Business validation errors are acknowledged.
+    // Unexpected errors return 500 so Stripe can retry.
 
     if (
       error.statusCode &&

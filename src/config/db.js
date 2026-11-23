@@ -19,6 +19,23 @@ export async function connectDB() {
 
   await db.command({ ping: 1 });
 
+  // One active booking per customer for each service.
+  await bookingCollection.createIndex(
+    {
+      customerEmail: 1,
+      serviceId: 1,
+    },
+    {
+      unique: true,
+      name: "unique_active_booking_per_customer_service",
+      partialFilterExpression: {
+        status: {
+          $in: ["requested", "accepted", "in-progress"],
+        },
+      },
+    }
+  );
+
   // One payment per booking.
   await paymentsCollection.createIndex(
     { bookingId: 1 },

@@ -96,20 +96,20 @@ router.post(
     }
 
     const [year, month, day] = preferredDate
-  .split("-")
-  .map(Number);
+      .split("-")
+      .map(Number);
 
-const selectedDate = new Date(
-  Date.UTC(year, month - 1, day)
-);
+    const selectedDate = new Date(
+      Date.UTC(year, month - 1, day)
+    );
 
-if (
-  selectedDate.getUTCFullYear() !== year ||
-  selectedDate.getUTCMonth() !== month - 1 ||
-  selectedDate.getUTCDate() !== day
-) {
-  throw new ApiError(400, "Invalid preferred date");
-}
+    if (
+      selectedDate.getUTCFullYear() !== year ||
+      selectedDate.getUTCMonth() !== month - 1 ||
+      selectedDate.getUTCDate() !== day
+    ) {
+      throw new ApiError(400, "Invalid preferred date");
+    }
 
     if (preferredDate < getTodayInDhaka()) {
       throw new ApiError(
@@ -148,7 +148,8 @@ if (
       );
     }
 
-    // Prevent duplicate active requests.
+    // Check for an existing active request.
+    // This provides a clear error before attempting insertion.
     const existingBooking = await bookingCollection.findOne({
       serviceId,
       customerEmail: req.user.email,
@@ -191,17 +192,34 @@ if (
       updatedAt: new Date(),
     };
 
-    const result = await bookingCollection.insertOne(booking);
+    try {
+      const result = await bookingCollection.insertOne(booking);
 
-    sendSuccess(
-      res,
-      {
-        ...booking,
-        _id: result.insertedId,
-      },
-      "Repair request submitted successfully",
-      201
-    );
+      sendSuccess(
+        res,
+        {
+          ...booking,
+          _id: result.insertedId,
+        },
+        "Repair request submitted successfully",
+        201
+      );
+    } catch (error) {
+      // MongoDB unique index protects against concurrent requests.
+      if (
+        error.code === 11000 &&
+        error.message?.includes(
+          "unique_active_booking_per_customer_service"
+        )
+      ) {
+        throw new ApiError(
+          409,
+          "You already have an active request for this service"
+        );
+      }
+
+      throw error;
+    }
   }
 );
 
